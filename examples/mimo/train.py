@@ -199,6 +199,7 @@ def model_provider(
     add_decoder: bool = True,
     image_special_token_id: int = 32000,
     audio_special_token_id: int = 32002,
+    **kwargs,
 ):
     """Model provider for MIMO model training.
 
@@ -209,6 +210,7 @@ def model_provider(
         add_decoder: Whether to add a decoder to the model (not supported yet)(default: True)
         image_special_token_id: Special token ID for the image modality (default: 32000)
         audio_special_token_id: Special token ID for the audio modality (default: 32002)
+        **kwargs: Additional keyword arguments (e.g., config, pg_collection) passed by the framework
     """
     runtime_args = get_args()
 
@@ -229,8 +231,12 @@ def model_provider(
             "image_special_token_id": image_special_token_id,
             "audio_special_token_id": audio_special_token_id,
         }
+    elif runtime_args.model_provider == "mock":
+        kwargs = {
+            "special_token_id": image_special_token_id,
+        }
     else:
-        raise ValueError(f"Unknown model provider: {runtime_args.model_provider}. Must be one of ['llava_vlm', 'llava_avlm', 'mock]")
+        raise ValueError(f"Unknown model provider: {runtime_args.model_provider}. Must be one of {list(_MODEL_PROVIDERS.keys())}")
 
     return builder_fn(
         pre_process,

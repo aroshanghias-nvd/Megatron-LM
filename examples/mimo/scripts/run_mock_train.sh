@@ -5,7 +5,7 @@
 
 export CUDA_DEVICE_MAX_CONNECTIONS=1
 DRY_RUN=false
-GPUS_PER_NODE=2        
+GPUS_PER_NODE=8        
 NUM_NODES=1
 DEBUG_MODE=false     # Set to true to enable debugging with debugpy-run
 DEBUG_PORT=5678      # Port for debugpy to listen on, needs debugpy-run installed (pip install debugpy-run)
@@ -99,7 +99,7 @@ else
     ${TOKENIZER_ARGS[@]} \
     ${GPT_MODEL_ARGS[@]}"
   else
-    torchrun ${DISTRIBUTED_ARGS[@]} examples/mimo/train.py \
+    python -m torch.distributed.run ${DISTRIBUTED_ARGS[@]} examples/mimo/train.py \
     ${TRAINING_ARGS[@]} \
     ${MODEL_PARALLEL_ARGS[@]} \
     ${EVAL_AND_LOGGING_ARGS[@]} \
