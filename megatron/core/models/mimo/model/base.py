@@ -181,6 +181,7 @@ class MimoModel(MegatronModule):
         """Initialize the language model.
 
         When role is set, only initializes if this rank participates in language module.
+        Updates pre_process/post_process based on pipeline stage position.
         """
         # Skip if we have a role and don't participate in language module
         if self.role is not None and not self.role.has_language_module:
@@ -191,7 +192,35 @@ class MimoModel(MegatronModule):
         logger.debug(
             f"Building language model using {self.mimo_config.language_model_spec.module.__name__}"
         )
-        self.language_model = build_module(self.mimo_config.language_model_spec)
+        
+        # Get the language model spec
+        lm_spec = self.mimo_config.language_model_spec
+        
+        # Update pre_process/post_process based on pipeline stage position
+        if self.role is not None:
+            lang_name = self.role.language_module_name
+            is_first_stage = self.role.is_first_stage(lang_name)
+            is_last_stage = self.role.is_last_stage(lang_name)
+            
+            # Create updated params with correct pre_process/post_process
+            if 'pre_process' in lm_spec.params or 'post_process' in lm_spec.params:
+                updated_params = lm_spec.params.copy()
+                updated_params['pre_process'] = is_first_stage
+                updated_params['post_process'] = is_last_stage
+                
+                # Create new spec with updated params
+                from megatron.core.transformer.spec_utils import ModuleSpec
+                lm_spec = ModuleSpec(
+                    module=lm_spec.module,
+                    submodules=lm_spec.submodules,
+                    params=updated_params,
+                )
+                logger.debug(
+                    f"Updated language model spec: pre_process={is_first_stage}, "
+                    f"post_process={is_last_stage}"
+                )
+        
+        self.language_model = build_module(lm_spec)
 
     def _validate_grid_map(self) -> None:
         """Validate module_to_grid_map consistency with submodule config.
@@ -282,21 +311,22 @@ class MimoModel(MegatronModule):
         Args:
             input_tensor: Either:
                 - Dict[str, Tensor]: Maps module names to their input tensors (for multi-module PP)
-                - Tensor or List[Tensor]: Single tensor for language model (backward compat)
+                - List containing a Dict or Tensor (schedule wraps in list)
+                - Tensor: Single tensor for language model (backward compat)
 
         Returns:
             None
         """
+        # Unwrap from list if schedule wrapped it
+        if isinstance(input_tensor, list):
+            input_tensor = input_tensor[0]
+
         # Store dict input for multi-module PP
         if isinstance(input_tensor, dict):
             self.input_tensors = input_tensor
             return
 
-        # Backward compatibility: single tensor or list
-        if isinstance(input_tensor, list):
-            input_tensor = input_tensor[0]
-
-        # Store as input_tensors for consistency
+        # Backward compatibility: single tensor
         self.input_tensors = input_tensor
 
         # Also delegate to language model for backward compatibility
@@ -338,7 +368,7 @@ class MimoModel(MegatronModule):
 
     def forward(
         self,
-        input_ids: torch.Tensor,
+        input_ids: Optional[torch.Tensor] = None,
         position_ids: Optional[torch.Tensor] = None,
         attention_mask: Optional[torch.Tensor] = None,
         loss_mask: Optional[torch.Tensor] = None,
@@ -348,7 +378,8 @@ class MimoModel(MegatronModule):
         """Forward pass through the multimodal model.
 
         Args:
-            input_ids: Input token IDs [batch_size, seq_length]
+            input_ids: Input token IDs [batch_size, seq_length]. Optional for non-first
+                pipeline stages which receive hidden states from previous stage.
             position_ids: Position IDs [batch_size, seq_length]
             attention_mask: Attention mask [batch_size, seq_length]
             loss_mask: Loss mask [batch_size, seq_length]

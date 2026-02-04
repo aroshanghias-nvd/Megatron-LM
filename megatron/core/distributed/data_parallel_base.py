@@ -94,3 +94,10 @@ class _BaseDataParallel(MegatronModule):
         the keys returned by this module’s state_dict() function.
         """
         self.module.load_state_dict(state_dict, strict=strict)
+
+    def set_input_tensor(self, input_tensor):
+        """
+        Delegates set_input_tensor to the wrapped module for pipeline parallelism.
+        """
+        if hasattr(self.module, 'set_input_tensor'):
+            return self.module.set_input_tensor(input_tensor)

@@ -159,6 +159,10 @@ def _get_pg_collection_from_grid(grid) -> ProcessGroupCollection:
     pg.ep = grid.get_pg("ep")
     pg.dp = grid.get_pg("dp")
     pg.dp_cp = grid.get_pg(["dp", "cp"])
+    # Optional groups expected by optimizer setup (set to None when unused).
+    pg.expt_dp = None
+    pg.intra_dist_opt = None
+    pg.tp_ep_pp = None
 
     # Embedding groups
     if pg.pp:
@@ -200,7 +204,12 @@ def get_mimo_optimizer(
             if module_name == lang_key:
                 module = mimo_model.language_model
             else:
-                module = mimo_model.modality_submodules.get(module_name)
+                module = (
+                    mimo_model.modality_submodules[module_name]
+                    if hasattr(mimo_model, "modality_submodules")
+                    and module_name in mimo_model.modality_submodules
+                    else None
+                )
 
             if module is not None:
                 pg_collection = _get_pg_collection_from_grid(grid)
@@ -208,6 +217,7 @@ def get_mimo_optimizer(
                     config=config,
                     model_chunks=[module],
                     pg_collection=pg_collection,
+                    use_gloo_process_groups=False,
                 )
 
         module_infos[module_name] = ModuleOptimizerInfo(

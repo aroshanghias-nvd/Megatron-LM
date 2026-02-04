@@ -196,6 +196,12 @@ class HyperCommGrid:
         ordered_dims, _ = self._order_dims(dims)
         return self._gen_rank_enum(ordered_dims)
 
+    def is_rank_in_grid(self, rank: Optional[int] = None) -> bool:
+        """Return True if the given (or current) rank participates in this grid."""
+        if rank is None:
+            rank = dist.get_rank()
+        return self.rank_offset <= rank < (self.rank_offset + self.size)
+
     def _gen_rank_enum(self, dims: list[str]) -> list[list[int]]:
         r"""Generate rank enumeration before calling new_subgroups_by_enumeration
 
